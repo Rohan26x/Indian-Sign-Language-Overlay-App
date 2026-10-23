@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ISL 3D Avatar Overlay</title>
+  <link rel="stylesheet" href="styles.css">
+  <!-- Three.js Library -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+  <div class="overlay-container">
+    <!-- Header with window drag handle -->
+    <header class="overlay-header">
+      <div class="header-title">
+        <div id="status-dot" class="status-dot disconnected" title="Disconnected"></div>
+        <span>ISL 3D Live Overlay</span>
+      </div>
+      <div class="header-controls">
+        <button id="btn-minimize" class="control-btn" title="Minimize">−</button>
+        <button id="btn-close" class="control-btn close" title="Close">✕</button>
+      </div>
+    </header>
+
+    <!-- Main Rendering Stage (3D Canvas & 2D Cards) -->
+    <div class="stage-container">
+      <canvas id="avatar-canvas"></canvas>
+      <div id="card-stage" class="card-stage"></div>
+    </div>
+
+    <!-- Ticker & Transcription Ribbon -->
+    <div class="ribbon-container">
+      <div id="transcription-preview" class="transcription-preview">
+        "Listening for system audio or text..."
+      </div>
+      <div id="gloss-badges" class="gloss-badges"></div>
+    </div>
+
+    <!-- Interactive Footer Controls -->
+    <footer class="overlay-footer">
+      <div class="input-row">
+        <input 
+          type="text" 
+          id="text-input" 
+          class="text-input" 
+          placeholder="Type English sentence (e.g. 'The boy eats apple')..." 
+        />
+        <button id="send-btn" class="send-btn">Sign</button>
+        <button id="audio-toggle-btn" class="audio-toggle-btn">
+          <span>🎙️</span> Live Audio
+        </button>
+      </div>
+
+      <div class="mode-row">
+        <div class="segmented-control">
+          <button class="segment-btn" data-mode="avatar">3D Avatar</button>
+          <button class="segment-btn" data-mode="card">Cards</button>
+          <button class="segment-btn active" data-mode="hybrid">Hybrid</button>
+        </div>
+
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <label for="speed-select">Speed:</label>
+          <select id="speed-select" class="speed-select">
+            <option value="0.75">0.75x</option>
+            <option value="1.0" selected>1.0x</option>
+            <option value="1.25">1.25x</option>
+            <option value="1.5">1.5x</option>
+          </select>
+
+          <label for="opacity-select">Opacity:</label>
+          <select id="opacity-select" class="speed-select">
+            <option value="1.0" selected>100%</option>
+            <option value="0.85">85%</option>
+            <option value="0.65">65%</option>
+          </select>
+        </div>
+      </div>
+    </footer>
+  </div>
+
+  <script src="avatar_engine.js"></script>
+  <script src="card_sequencer_ui.js"></script>
+  <script src="renderer.js"></script>
+</body>
+</html>

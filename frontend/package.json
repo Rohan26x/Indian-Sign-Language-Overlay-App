@@ -1,0 +1,15 @@
+{
+  "name": "isl-overlay-frontend",
+  "version": "1.0.0",
+  "description": "Real-Time System Audio to ISL 3D Avatar & Visual Overlay Frontend",
+  "main": "electron-main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "dependencies": {
+    "three": "^0.160.0"
+  },
+  "devDependencies": {
+    "electron": "^28.2.0"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "name": "isl-overlay-monorepo",
+  "version": "1.0.0",
+  "description": "Real-Time System Audio to Indian Sign Language (ISL) 3D Avatar Overlay Application",
+  "scripts": {
+    "start": "start_app.bat",
+    "test:backend": "python backend/tests/test_translator.py && python backend/tests/test_sequencer.py"
+  },
+  "keywords": [
+    "indian-sign-language",
+    "3d-avatar",
+    "speech-to-sign",
+    "threejs",
+    "electron-overlay"
+  ],
+  "license": "MIT"
+}
