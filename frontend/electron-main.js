@@ -28,11 +28,17 @@ function createWindow() {
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
+      backgroundThrottling: false
     }
   });
 
+  mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
+    console.log(`[Renderer Console] ${message} (${sourceId}:${line})`);
+  });
+
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
+  mainWindow.setAlwaysOnTop(true, 'screen-saver');
 
   // Global hotkeys
   globalShortcut.register('CommandOrControl+Shift+H', () => {
@@ -40,6 +46,7 @@ function createWindow() {
       mainWindow.hide();
     } else {
       mainWindow.show();
+      mainWindow.setAlwaysOnTop(true, 'screen-saver');
     }
   });
 
@@ -57,9 +64,10 @@ function createWindow() {
 // IPC Handlers
 ipcMain.on('set-opacity', (event, opacityValue) => {
   if (mainWindow) {
-    mainWindow.setOpacity(Math.max(0.2, Math.min(1.0, opacityValue)));
+    mainWindow.setOpacity(Math.max(0.3, Math.min(1.0, opacityValue)));
   }
 });
+
 
 ipcMain.on('set-click-through', (event, enable) => {
   if (mainWindow) {

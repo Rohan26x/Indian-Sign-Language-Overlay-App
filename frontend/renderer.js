@@ -1,12 +1,15 @@
 /**
- * Main UI Controller & WebSocket Client for ISL Overlay Application.
+ * Main UI Controller & Real-Time WebSocket Client for ISL Overlay Application (FR-6, FR-7).
  */
 
 let socket = null;
 let avatarEngine = null;
 let cardSequencer = null;
 let isRecordingAudio = false;
+let isClickThrough = false;
 let currentMode = 'hybrid'; // 'avatar', 'card', 'hybrid'
+let lastTranslatedGlosses = [];
+let lastCommittedText = "";
 
 document.addEventListener('DOMContentLoaded', () => {
   const canvas = document.getElementById('avatar-canvas');
@@ -18,13 +21,22 @@ document.addEventListener('DOMContentLoaded', () => {
   const sendBtn = document.getElementById('send-btn');
   const audioToggleBtn = document.getElementById('audio-toggle-btn');
   const speedSelect = document.getElementById('speed-select');
-  const opacitySelect = document.getElementById('opacity-select');
+  const avatarSelect = document.getElementById('avatar-select');
+  const themeSelect = document.getElementById('theme-select');
+  const brightnessSlider = document.getElementById('brightness-slider');
+  const opacitySlider = document.getElementById('opacity-slider');
+
+  const btnClickthrough = document.getElementById('btn-clickthrough');
+  const btnFeedback = document.getElementById('btn-feedback');
+  const feedbackToast = document.getElementById('feedback-toast');
+  const metricTotal = document.getElementById('metric-total');
+  const metricNlp = document.getElementById('metric-nlp');
 
   // Initialize Rendering Engines
   avatarEngine = new AvatarEngine(canvas);
   cardSequencer = new CardSequencerUI(cardStage, ribbonBadges);
 
-  // Set initial display mode
+  // Set initial display mode (Dual-Mode: Hybrid)
   setMode('hybrid');
 
   // Window Controls
@@ -36,22 +48,84 @@ document.addEventListener('DOMContentLoaded', () => {
     if (window.electronAPI) window.electronAPI.closeApp();
   });
 
-  // Speed Adjustment
+  // Click-Through Toggle
+  btnClickthrough.addEventListener('click', () => {
+    isClickThrough = !isClickThrough;
+    if (window.electronAPI) {
+      window.electronAPI.setClickThrough(isClickThrough);
+    }
+    btnClickthrough.style.color = isClickThrough ? '#06b6d4' : '';
+    showToast(isClickThrough ? 'Click-through enabled' : 'Click-through disabled');
+  });
+
+  if (window.electronAPI && window.electronAPI.onClickThroughToggled) {
+    window.electronAPI.onClickThroughToggled((enabled) => {
+      isClickThrough = enabled;
+      btnClickthrough.style.color = enabled ? '#06b6d4' : '';
+      showToast(enabled ? 'Click-through enabled (Ctrl+Shift+T)' : 'Click-through disabled');
+    });
+  }
+
+  // Speed Control (FR-7)
   speedSelect.addEventListener('change', (e) => {
     const spd = parseFloat(e.target.value);
     avatarEngine.setSpeed(spd);
     cardSequencer.setSpeed(spd);
   });
 
-  // Opacity Adjustment
-  if (opacitySelect) {
-    opacitySelect.addEventListener('change', (e) => {
-      const op = parseFloat(e.target.value);
-      if (window.electronAPI) window.electronAPI.setOpacity(op);
+  // Avatar Character Switcher (Hugo / Maya - Hand Talk Architecture)
+  if (avatarSelect) {
+    avatarSelect.addEventListener('change', (e) => {
+      const char = e.target.value;
+      avatarEngine.setCharacter(char);
+      showToast(`Avatar changed to ${char.toUpperCase()}`);
     });
   }
 
-  // Mode Selection (Avatar / Cards / Hybrid)
+  // Clothing Theme Toggle (FR-7)
+  themeSelect.addEventListener('change', (e) => {
+    const theme = e.target.value;
+    avatarEngine.setClothingTheme(theme);
+  });
+
+
+  // Model Brightness Slider
+  if (brightnessSlider) {
+    brightnessSlider.addEventListener('input', (e) => {
+      const val = parseFloat(e.target.value);
+      avatarEngine.setBrightness(val);
+    });
+  }
+
+  // Window Opacity Slider (FR-7)
+  opacitySlider.addEventListener('input', (e) => {
+    const val = parseFloat(e.target.value);
+    if (window.electronAPI) {
+      window.electronAPI.setOpacity(val);
+    }
+  });
+
+  // Flag Missing Sign / Interpreter Feedback (Section 4.2.2)
+  btnFeedback.addEventListener('click', () => {
+    if (!socket || socket.readyState !== WebSocket.OPEN) return;
+    const glossToFlag = lastTranslatedGlosses.length > 0 ? lastTranslatedGlosses.join(' ') : 'MANUAL_FLAG';
+    socket.send(JSON.stringify({
+      type: 'flag_missing_sign',
+      gloss: glossToFlag,
+      original_phrase: lastCommittedText || textInput.value,
+      notes: 'Flagged by user from overlay feedback button'
+    }));
+  });
+
+  function showToast(message) {
+    feedbackToast.textContent = message;
+    feedbackToast.classList.add('show');
+    setTimeout(() => {
+      feedbackToast.classList.remove('show');
+    }, 2400);
+  }
+
+  // Display Mode Selection (3D Avatar / Cards / Hybrid)
   document.querySelectorAll('.segment-btn').forEach((btn) => {
     btn.addEventListener('click', (e) => {
       document.querySelectorAll('.segment-btn').forEach(b => b.classList.remove('active'));
@@ -74,7 +148,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Send Direct Text
+  // Submit Text Input
   function submitText() {
     const text = textInput.value.trim();
     if (text && socket && socket.readyState === WebSocket.OPEN) {
@@ -91,7 +165,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.key === 'Enter') submitText();
   });
 
-  // Audio Toggle
+  // Audio Capture Toggle (FR-1)
   audioToggleBtn.addEventListener('click', () => {
     if (!socket || socket.readyState !== WebSocket.OPEN) return;
     if (!isRecordingAudio) {
@@ -101,7 +175,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Connect WebSocket to Python Backend
+  // Connect WebSocket to Python Streaming Backend
   connectWebSocket();
 
   function connectWebSocket() {
@@ -109,13 +183,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     socket.onopen = () => {
       statusDot.classList.remove('disconnected');
-      statusDot.title = 'Connected to Backend';
+      statusDot.title = 'Connected to ISL Streaming Pipeline';
     };
 
     socket.onclose = () => {
       statusDot.classList.add('disconnected');
       statusDot.title = 'Disconnected (Reconnecting...)';
-      setTimeout(connectWebSocket, 2000);
+      setTimeout(connectWebSocket, 1500);
     };
 
     socket.onerror = () => {
@@ -126,29 +200,55 @@ document.addEventListener('DOMContentLoaded', () => {
       try {
         const data = JSON.parse(event.data);
 
-        if (data.type === 'isl_translation') {
-          // Update transcription ribbon
+        if (data.type === 'system_status') {
+          statusDot.title = `Connected (${data.asr_engine || 'VOSK'} Engine, ${data.vocabulary_count || 51} signs)`;
+        } else if (data.type === 'partial_transcription') {
+          // Zero-latency streaming subtitle ticker
+          transcriptionPreview.textContent = `"${data.text}..."`;
+
+        } else if (data.type === 'isl_translation') {
+          lastCommittedText = data.original_text;
+          lastTranslatedGlosses = data.isl_glosses || [];
+
+          // Update subtitle ribbon with committed utterance
           transcriptionPreview.textContent = `"${data.original_text}"`;
+
+          // Update live telemetry metrics
+          if (data.telemetry) {
+            metricTotal.textContent = data.telemetry.total_pipeline_ms || '0';
+            metricNlp.textContent = data.telemetry.nlp_ms || '0';
+          }
 
           // Feed sequence to 2D card sequencer
           cardSequencer.enqueueSequence(data.sequence);
 
-          // Feed bone tracks to 3D avatar engine
-          data.sequence.forEach((item) => {
-            if (item.keyframe_track) {
-              avatarEngine.playSequence(item.keyframe_track, data.nmm);
-            }
-          });
+          // Feed keyframe tracks to 3D avatar engine with NMM payload
+          if (data.sequence) {
+            data.sequence.forEach((item, idx) => {
+              const tokenNmm = (data.token_nmms && data.token_nmms[idx]) ? data.token_nmms[idx] : data.nmm;
+              if (item.keyframe_track) {
+                avatarEngine.playSequence(item.keyframe_track, tokenNmm);
+              }
+            });
+          }
+        } else if (data.type === 'feedback_ack') {
+          showToast(`Missing sign '${data.gloss}' recorded in SQLite!`);
         } else if (data.type === 'audio_status') {
           isRecordingAudio = (data.status === 'recording');
           if (isRecordingAudio) {
             audioToggleBtn.classList.add('recording');
             audioToggleBtn.innerHTML = '<span>⏹️</span> Stop Audio';
+            if (data.source) {
+              audioToggleBtn.title = `Capturing System Audio: ${data.source}`;
+              showToast(`Active: ${data.source}`);
+            }
           } else {
             audioToggleBtn.classList.remove('recording');
-            audioToggleBtn.innerHTML = '<span>🎙️</span> Live Audio';
+            audioToggleBtn.innerHTML = '<span>🎙️</span> System Audio';
+            audioToggleBtn.title = 'Capture desktop system audio loopback';
           }
         }
+
       } catch (err) {
         console.error('Failed to parse incoming payload:', err);
       }

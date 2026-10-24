@@ -4,24 +4,53 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from isl_translator import ISLTranslator
 
-def test_svo_to_sov_translation():
+def test_mandatory_boy_eating_apple():
+    """Verifies mandatory Page 14 test case: 'The boy is eating an apple' -> ['BOY', 'APPLE', 'EAT', 'PRESENT'] in <15 ms."""
     translator = ISLTranslator()
+    res = translator.translate("The boy is eating an apple")
     
-    # "The boy is eating an apple" -> [BOY, APPLE, EAT]
-    res1 = translator.translate("The boy is eating an apple.")
-    assert "BOY" in res1["isl_glosses"]
-    assert "APPLE" in res1["isl_glosses"]
-    assert "EAT" in res1["isl_glosses"]
-    assert res1["nmm"] == "neutral"
+    assert res["isl_glosses"] == ["BOY", "APPLE", "EAT", "PRESENT"], f"Expected ['BOY', 'APPLE', 'EAT', 'PRESENT'], got {res['isl_glosses']}"
+    assert res["nmm"]["eyebrows"] == "neutral"
+    assert res["nmm"]["headTilt"] == 0.0
+    assert res["nmm"]["headShake"] is False
+    assert res["parse_latency_ms"] < 15.0, f"Parse latency {res['parse_latency_ms']}ms exceeded 15ms ceiling"
 
-def test_question_nmm_extraction():
+def test_wh_question_nmm():
+    """Verifies WH-question syntax and furrowed eyebrows NMM dictionary."""
     translator = ISLTranslator()
-    
-    # "What are you reading?" -> Question marker placed at end + NMM question
     res = translator.translate("What are you reading?")
+    
     assert res["is_question"] is True
-    assert res["nmm"] == "question"
+    assert res["is_wh_question"] is True
+    assert res["nmm"]["eyebrows"] == "furrowed"
+    assert res["nmm"]["headTilt"] == 0.25
+    assert res["nmm"]["headShake"] is False
+    assert res["nmm"]["mouth"] == "open_small"
     assert "WHAT" in res["isl_glosses"]
+    assert res["parse_latency_ms"] < 15.0
+
+def test_yes_no_question_nmm():
+    """Verifies Yes/No question syntax and raised eyebrows NMM dictionary."""
+    translator = ISLTranslator()
+    res = translator.translate("Are you happy?")
+    
+    assert res["is_question"] is True
+    assert res["nmm"]["eyebrows"] == "raised"
+    assert res["nmm"]["headTilt"] == 0.18
+    assert res["nmm"]["mouth"] == "neutral"
+    assert res["parse_latency_ms"] < 15.0
+
+def test_negation_nmm():
+    """Verifies negation syntax, head shake, and frown mouth NMM dictionary."""
+    translator = ISLTranslator()
+    res = translator.translate("I do not eat apple")
+    
+    assert res["has_negation"] is True
+    assert res["nmm"]["headShake"] is True
+    assert res["nmm"]["eyebrows"] == "furrowed"
+    assert res["nmm"]["mouth"] == "frown"
+    assert "NOT" in res["isl_glosses"]
+    assert res["parse_latency_ms"] < 15.0
 
 def test_lemmatization():
     translator = ISLTranslator()
@@ -30,14 +59,10 @@ def test_lemmatization():
     assert translator.lemmatize_token("books") == "BOOK"
     assert translator.lemmatize_token("studied") == "STUDY"
 
-def test_negation_detection():
-    translator = ISLTranslator()
-    res = translator.translate("I do not like bad water.")
-    assert res["nmm"] == "negation"
-
 if __name__ == "__main__":
-    test_svo_to_sov_translation()
-    test_question_nmm_extraction()
+    test_mandatory_boy_eating_apple()
+    test_wh_question_nmm()
+    test_yes_no_question_nmm()
+    test_negation_nmm()
     test_lemmatization()
-    test_negation_detection()
     print("All ISLTranslator tests passed successfully!")
