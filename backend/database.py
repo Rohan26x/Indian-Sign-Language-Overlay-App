@@ -43,7 +43,37 @@ class DatabaseManager:
                     keyframe_track TEXT
                 )
             """)
+
+            # Interpreter feedback table (FR-7 / Use Case Diagram 4.2.2)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS interpreter_feedback (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    gloss TEXT NOT NULL,
+                    original_phrase TEXT,
+                    reported_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    status TEXT DEFAULT 'pending',
+                    notes TEXT
+                )
+            """)
             conn.commit()
+
+    def record_feedback(self, gloss: str, original_phrase: str = "", notes: str = "") -> int:
+        """Logs missing or inaccurate signs for ISL interpreter review."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO interpreter_feedback (gloss, original_phrase, notes)
+                VALUES (?, ?, ?)
+            """, (gloss, original_phrase, notes))
+            conn.commit()
+            return cursor.lastrowid
+
+    def get_all_feedback(self) -> List[Dict[str, Any]]:
+        """Retrieves all interpreter feedback records."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM interpreter_feedback ORDER BY reported_at DESC")
+            return [dict(r) for r in cursor.fetchall()]
 
     def lookup_sign(self, gloss: str) -> Optional[Dict[str, Any]]:
         with self.get_connection() as conn:
@@ -80,3 +110,4 @@ class DatabaseManager:
             cursor = conn.cursor()
             cursor.execute("SELECT gloss FROM signs ORDER BY gloss")
             return [r["gloss"] for r in cursor.fetchall()]
+

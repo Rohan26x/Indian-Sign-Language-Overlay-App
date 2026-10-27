@@ -1,122 +1,205 @@
 import json
+import os
 from database import DatabaseManager
 
-def generate_sample_keyframes(gesture_type: str = "wave") -> list:
-    """
-    Generates procedural bone transform keyframes for Three.js skeletal playback.
-    Bones: RightArm, LeftArm, RightForeArm, LeftForeArm, RightHand, LeftHand, Head.
-    """
-    if gesture_type == "greeting":
-        # Right hand raises and waves
-        return [
-            {"time": 0.0, "RightArm": [0.0, 0.0, 0.3, 0.95], "RightForeArm": [-0.5, 0.0, 0.0, 0.86], "morphs": {"smile": 0.5}},
-            {"time": 0.4, "RightArm": [0.2, 0.0, 0.5, 0.84], "RightForeArm": [-0.8, 0.2, 0.0, 0.55], "morphs": {"smile": 0.8}},
-            {"time": 0.8, "RightArm": [0.2, 0.0, 0.3, 0.93], "RightForeArm": [-0.6, -0.2, 0.0, 0.77], "morphs": {"smile": 0.8}},
-            {"time": 1.2, "RightArm": [0.0, 0.0, 0.0, 1.0], "RightForeArm": [0.0, 0.0, 0.0, 1.0], "morphs": {"smile": 0.0}}
-        ]
-    elif gesture_type == "eating":
-        # Right hand brings food to mouth
-        return [
-            {"time": 0.0, "RightArm": [0.0, 0.0, 0.2, 0.97], "RightForeArm": [-0.3, 0.0, 0.0, 0.95], "morphs": {"mouthOpen": 0.0}},
-            {"time": 0.5, "RightArm": [0.3, 0.0, 0.4, 0.86], "RightForeArm": [-1.1, 0.3, 0.0, 0.2], "morphs": {"mouthOpen": 0.4}},
-            {"time": 1.0, "RightArm": [0.2, 0.0, 0.3, 0.92], "RightForeArm": [-0.5, 0.1, 0.0, 0.86], "morphs": {"mouthOpen": 0.1}},
-            {"time": 1.4, "RightArm": [0.0, 0.0, 0.0, 1.0], "RightForeArm": [0.0, 0.0, 0.0, 1.0], "morphs": {"mouthOpen": 0.0}}
-        ]
-    elif gesture_type == "question":
-        # Both hands open outward, eyebrows raise
-        return [
-            {"time": 0.0, "RightArm": [0.0, 0.0, 0.2, 0.97], "LeftArm": [0.0, 0.0, -0.2, 0.97], "morphs": {"browInnerUp": 0.2}},
-            {"time": 0.6, "RightArm": [0.2, 0.2, 0.6, 0.75], "LeftArm": [0.2, -0.2, -0.6, 0.75], "morphs": {"browInnerUp": 0.9, "eyeWide": 0.5}},
-            {"time": 1.2, "RightArm": [0.0, 0.0, 0.0, 1.0], "LeftArm": [0.0, 0.0, 0.0, 1.0], "morphs": {"browInnerUp": 0.0, "eyeWide": 0.0}}
-        ]
-    else: # Default neutral sign
-        return [
-            {"time": 0.0, "RightArm": [0.1, 0.0, 0.3, 0.95], "LeftArm": [0.1, 0.0, -0.3, 0.95]},
-            {"time": 0.5, "RightArm": [0.3, 0.1, 0.4, 0.86], "LeftArm": [0.3, -0.1, -0.4, 0.86]},
-            {"time": 1.0, "RightArm": [0.0, 0.0, 0.0, 1.0], "LeftArm": [0.0, 0.0, 0.0, 1.0]}
-        ]
+def load_handtalk_lexicon() -> dict:
+    json_path = os.path.join(os.path.dirname(__file__), "..", "frontend", "assets", "handtalk_anim_lexicon.json")
+    if os.path.exists(json_path):
+        with open(json_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {}
 
 def seed():
+    ht_lex = load_handtalk_lexicon()
+    bsl_anims = ht_lex.get("bsl", {})
+    bzs_anims = ht_lex.get("bzs", {})
+    ht_words = ht_lex.get("words", {})
+
     db = DatabaseManager()
     with db.get_connection() as conn:
         cursor = conn.cursor()
         
-        # Core ISL Lexicon data
-        signs_data = [
-            # Greetings
-            ("HELLO", "hello,hi,hey", "GREETING", "👋", "cards/hello.svg", json.dumps(generate_sample_keyframes("greeting")), "smile"),
-            ("GOOD_MORNING", "good morning,morning", "GREETING", "🌅", "cards/good_morning.svg", json.dumps(generate_sample_keyframes("greeting")), "smile"),
-            ("THANK_YOU", "thank you,thanks", "COURTESY", "🙏", "cards/thank_you.svg", json.dumps(generate_sample_keyframes("greeting")), "nod"),
-            ("PLEASE", "please,kindly", "COURTESY", "🤲", "cards/please.svg", json.dumps(generate_sample_keyframes("neutral")), "neutral"),
-            ("WELCOME", "welcome", "COURTESY", "🤝", "cards/welcome.svg", json.dumps(generate_sample_keyframes("greeting")), "smile"),
-            ("SORRY", "sorry,apologies", "COURTESY", "🙇", "cards/sorry.svg", json.dumps(generate_sample_keyframes("neutral")), "apologetic"),
+        # Complete ISL Lexicon data with exact Hand Talk 3D movement mappings
+        # Format: (gloss, english_keywords, category, emoji, card_asset, fallback_nmm)
+        definitions = [
+            # Greetings & Courtesy
+            ("HELLO", "hello,hi,hey,greetings", "GREETING", "👋", "cards/hello.svg", "smile"),
+            ("GOOD_MORNING", "good morning,morning", "GREETING", "🌅", "cards/good_morning.svg", "smile"),
+            ("THANK_YOU", "thank you,thanks,grateful", "COURTESY", "🙏", "cards/thank_you.svg", "nod"),
+            ("PLEASE", "please,kindly", "COURTESY", "🤲", "cards/please.svg", "neutral"),
+            ("WELCOME", "welcome", "COURTESY", "🤝", "cards/welcome.svg", "smile"),
+            ("SORRY", "sorry,apologies,pardon", "COURTESY", "🙇", "cards/sorry.svg", "apologetic"),
 
-            # Nouns
-            ("BOY", "boy,kid,guy", "NOUN", "👦", "cards/boy.svg", json.dumps(generate_sample_keyframes("neutral")), "neutral"),
-            ("GIRL", "girl,female child", "NOUN", "👧", "cards/girl.svg", json.dumps(generate_sample_keyframes("neutral")), "neutral"),
-            ("MAN", "man,male,adult", "NOUN", "👨", "cards/man.svg", json.dumps(generate_sample_keyframes("neutral")), "neutral"),
-            ("WOMAN", "woman,female,lady", "NOUN", "👩", "cards/woman.svg", json.dumps(generate_sample_keyframes("neutral")), "neutral"),
-            ("APPLE", "apple,fruit", "NOUN", "🍎", "cards/apple.svg", json.dumps(generate_sample_keyframes("eating")), "neutral"),
-            ("BOOK", "book,textbook,reading", "NOUN", "📖", "cards/book.svg", json.dumps(generate_sample_keyframes("neutral")), "neutral"),
-            ("WATER", "water,drink,aqua", "NOUN", "💧", "cards/water.svg", json.dumps(generate_sample_keyframes("eating")), "neutral"),
-            ("SCHOOL", "school,college,campus", "NOUN", "🏫", "cards/school.svg", json.dumps(generate_sample_keyframes("neutral")), "neutral"),
-            ("HOME", "home,house", "NOUN", "🏠", "cards/home.svg", json.dumps(generate_sample_keyframes("neutral")), "neutral"),
-            ("TEACHER", "teacher,professor,instructor", "NOUN", "🧑‍🏫", "cards/teacher.svg", json.dumps(generate_sample_keyframes("neutral")), "neutral"),
-            ("STUDENT", "student,pupil,learner", "NOUN", "🧑‍🎓", "cards/student.svg", json.dumps(generate_sample_keyframes("neutral")), "neutral"),
-            ("INDIA", "india,bharat", "NOUN", "🇮🇳", "cards/india.svg", json.dumps(generate_sample_keyframes("greeting")), "proud"),
+            # People & Pronouns
+            ("BOY", "boy,kid,guy,male child", "NOUN", "👦", "cards/boy.svg", "neutral"),
+            ("GIRL", "girl,female child", "NOUN", "👧", "cards/girl.svg", "neutral"),
+            ("MAN", "man,male,adult,gentleman", "NOUN", "👨", "cards/man.svg", "neutral"),
+            ("WOMAN", "woman,female,lady", "NOUN", "👩", "cards/woman.svg", "neutral"),
+            ("MOTHER", "mother,mom,mommy,mama", "NOUN", "🤱", "cards/mother.svg", "smile"),
+            ("FATHER", "father,dad,daddy,papa", "NOUN", "👨", "cards/father.svg", "neutral"),
+            ("FRIEND", "friend,buddy,pal", "NOUN", "🧑‍🤝‍🧑", "cards/friend.svg", "smile"),
+            ("FAMILY", "family,relatives", "NOUN", "👨‍👩‍👧‍👦", "cards/family.svg", "smile"),
+            ("BABY", "baby,infant,toddler", "NOUN", "👶", "cards/baby.svg", "smile"),
+            ("BROTHER", "brother,bro", "NOUN", "👦", "cards/brother.svg", "neutral"),
+            ("SISTER", "sister,sis", "NOUN", "👧", "cards/sister.svg", "neutral"),
+            ("TEACHER", "teacher,professor,instructor,educator", "NOUN", "🧑‍🏫", "cards/teacher.svg", "neutral"),
+            ("STUDENT", "student,pupil,learner", "NOUN", "🧑‍🎓", "cards/student.svg", "neutral"),
+            ("DOCTOR", "doctor,physician,medic", "NOUN", "🩺", "cards/doctor.svg", "neutral"),
+            ("I", "i,me,my,myself", "PRONOUN", "👤", "cards/i.svg", "neutral"),
+            ("YOU", "you,your,yours", "PRONOUN", "👉", "cards/you.svg", "neutral"),
+            ("HE", "he,him,his", "PRONOUN", "👨", "cards/he.svg", "neutral"),
+            ("SHE", "she,her,hers", "PRONOUN", "👩", "cards/she.svg", "neutral"),
+            ("WE", "we,us,our,ours", "PRONOUN", "👥", "cards/we.svg", "neutral"),
+            ("THEY", "they,them,their,theirs", "PRONOUN", "👥", "cards/they.svg", "neutral"),
 
-            # Verbs
-            ("EAT", "eat,eating,ate,consumes", "VERB", "🍽️", "cards/eat.svg", json.dumps(generate_sample_keyframes("eating")), "chew"),
-            ("DRINK", "drink,drinking,drank", "VERB", "🥤", "cards/drink.svg", json.dumps(generate_sample_keyframes("eating")), "neutral"),
-            ("READ", "read,reading,reads", "VERB", "👓", "cards/read.svg", json.dumps(generate_sample_keyframes("neutral")), "focused"),
-            ("WRITE", "write,writing,wrote", "VERB", "✍️", "cards/write.svg", json.dumps(generate_sample_keyframes("neutral")), "focused"),
-            ("GO", "go,going,went", "VERB", "🚶", "cards/go.svg", json.dumps(generate_sample_keyframes("neutral")), "neutral"),
-            ("COME", "come,coming,came", "VERB", "🏃", "cards/come.svg", json.dumps(generate_sample_keyframes("neutral")), "neutral"),
-            ("SEE", "see,seeing,saw,look,watch", "VERB", "👀", "cards/see.svg", json.dumps(generate_sample_keyframes("neutral")), "neutral"),
-            ("HELP", "help,assisting,support", "VERB", "🆘", "cards/help.svg", json.dumps(generate_sample_keyframes("greeting")), "caring"),
-            ("STUDY", "study,studying,studies", "VERB", "📚", "cards/study.svg", json.dumps(generate_sample_keyframes("neutral")), "focused"),
-            ("PLAY", "play,playing,played", "VERB", "⚽", "cards/play.svg", json.dumps(generate_sample_keyframes("neutral")), "happy"),
+            # Food & Drink
+            ("WATER", "water,drink,aqua", "NOUN", "💧", "cards/water.svg", "neutral"),
+            ("EAT", "eat,eating,ate,consumes,dine,food", "VERB", "🍽️", "cards/eat.svg", "chew"),
+            ("DRINK", "drink,drinking,drank,beverage", "VERB", "🥤", "cards/drink.svg", "neutral"),
+            ("FOOD", "food,meal,dishes", "NOUN", "🍲", "cards/food.svg", "chew"),
+            ("APPLE", "apple,fruit", "NOUN", "🍎", "cards/apple.svg", "neutral"),
+            ("BREAD", "bread,loaf,toast", "NOUN", "🍞", "cards/bread.svg", "neutral"),
+            ("MILK", "milk,dairy", "NOUN", "🥛", "cards/milk.svg", "neutral"),
+            ("COFFEE", "coffee,espresso", "NOUN", "☕", "cards/coffee.svg", "neutral"),
+            ("TEA", "tea,chai", "NOUN", "🍵", "cards/tea.svg", "neutral"),
+            ("FRUIT", "fruit,fruits", "NOUN", "🍇", "cards/fruit.svg", "neutral"),
 
-            # Pronouns & Adjectives
-            ("I", "i,me,my,myself", "PRONOUN", "👤", "cards/i.svg", json.dumps(generate_sample_keyframes("neutral")), "neutral"),
-            ("YOU", "you,your,yours", "PRONOUN", "👉", "cards/you.svg", json.dumps(generate_sample_keyframes("neutral")), "neutral"),
-            ("HE", "he,him,his", "PRONOUN", "👨", "cards/he.svg", json.dumps(generate_sample_keyframes("neutral")), "neutral"),
-            ("SHE", "she,her,hers", "PRONOUN", "👩", "cards/she.svg", json.dumps(generate_sample_keyframes("neutral")), "neutral"),
-            ("GOOD", "good,nice,great,fine", "ADJECTIVE", "👍", "cards/good.svg", json.dumps(generate_sample_keyframes("greeting")), "smile"),
-            ("BAD", "bad,poor,unpleasant", "ADJECTIVE", "👎", "cards/bad.svg", json.dumps(generate_sample_keyframes("neutral")), "frown"),
-            ("HAPPY", "happy,cheerful,glad", "ADJECTIVE", "😊", "cards/happy.svg", json.dumps(generate_sample_keyframes("greeting")), "smile"),
-            ("SAD", "sad,unhappy,depressed", "ADJECTIVE", "😢", "cards/sad.svg", json.dumps(generate_sample_keyframes("neutral")), "frown"),
+            # Objects & Places
+            ("SCHOOL", "school,college,campus,academy", "NOUN", "🏫", "cards/school.svg", "neutral"),
+            ("BOOK", "book,textbook,reading,novel", "NOUN", "📖", "cards/book.svg", "neutral"),
+            ("PEN", "pen,pencil,marker", "NOUN", "🖊️", "cards/pen.svg", "neutral"),
+            ("WORK", "work,job,employment,office", "NOUN", "💼", "cards/work.svg", "neutral"),
+            ("HOME", "home,house,residence", "NOUN", "🏠", "cards/home.svg", "neutral"),
+            ("HOSPITAL", "hospital,clinic,medical center", "NOUN", "🏥", "cards/hospital.svg", "neutral"),
+            ("CAR", "car,automobile,vehicle", "NOUN", "🚗", "cards/car.svg", "neutral"),
+            ("BUS", "bus,coach", "NOUN", "🚌", "cards/bus.svg", "neutral"),
+            ("TRAIN", "train,railway,metro", "NOUN", "🚆", "cards/train.svg", "neutral"),
+            ("INDIA", "india,bharat", "NOUN", "🇮🇳", "cards/india.svg", "proud"),
 
-            # Interrogatives (NMM Question tag)
-            ("WHAT", "what", "QUESTION", "❓", "cards/what.svg", json.dumps(generate_sample_keyframes("question")), "furrow_brow"),
-            ("WHERE", "where", "QUESTION", "📍", "cards/where.svg", json.dumps(generate_sample_keyframes("question")), "furrow_brow"),
-            ("WHO", "who", "QUESTION", "🙋", "cards/who.svg", json.dumps(generate_sample_keyframes("question")), "furrow_brow"),
-            ("WHY", "why", "QUESTION", "🤔", "cards/why.svg", json.dumps(generate_sample_keyframes("question")), "furrow_brow"),
-            ("WHEN", "when", "QUESTION", "⏰", "cards/when.svg", json.dumps(generate_sample_keyframes("question")), "furrow_brow"),
-            ("HOW", "how", "QUESTION", "💡", "cards/how.svg", json.dumps(generate_sample_keyframes("question")), "furrow_brow"),
+            # Actions & Verbs
+            ("GO", "go,going,went,depart", "VERB", "🚶", "cards/go.svg", "neutral"),
+            ("COME", "come,coming,came,arrive", "VERB", "🏃", "cards/come.svg", "neutral"),
+            ("SEE", "see,seeing,saw,look,watch", "VERB", "👀", "cards/see.svg", "neutral"),
+            ("HEAR", "hear,hearing,heard,listen", "VERB", "👂", "cards/hear.svg", "neutral"),
+            ("SPEAK", "speak,speaking,spoke,talk,say", "VERB", "🗣️", "cards/speak.svg", "neutral"),
+            ("WRITE", "write,writing,wrote", "VERB", "✍️", "cards/write.svg", "focused"),
+            ("READ", "read,reading,reads", "VERB", "👓", "cards/read.svg", "focused"),
+            ("LEARN", "learn,learning,learned,study", "VERB", "🧠", "cards/learn.svg", "focused"),
+            ("STUDY", "study,studying,studies", "VERB", "📚", "cards/study.svg", "focused"),
+            ("PLAY", "play,playing,played,game", "VERB", "⚽", "cards/play.svg", "happy"),
+            ("SLEEP", "sleep,sleeping,slept,rest", "VERB", "😴", "cards/sleep.svg", "neutral"),
+            ("WALK", "walk,walking,walked", "VERB", "🚶", "cards/walk.svg", "neutral"),
+            ("RUN", "run,running,ran,jog", "VERB", "🏃", "cards/run.svg", "neutral"),
+            ("SIT", "sit,sitting,sat", "VERB", "🪑", "cards/sit.svg", "neutral"),
+            ("STAND", "stand,standing,stood", "VERB", "🧍", "cards/stand.svg", "neutral"),
+            ("STOP", "stop,halt,pause", "VERB", "🛑", "cards/stop.svg", "neutral"),
+            ("HELP", "help,assisting,support,aid", "VERB", "🆘", "cards/help.svg", "caring"),
+            ("OPEN", "open,opening,opened", "VERB", "🔓", "cards/open.svg", "neutral"),
+            ("CLOSE", "close,closing,closed,shut", "VERB", "🔒", "cards/close.svg", "neutral"),
+            ("START", "start,begin,initiate", "VERB", "🚀", "cards/start.svg", "neutral"),
+            ("FINISH", "finish,end,complete,done", "VERB", "🏁", "cards/finish.svg", "neutral"),
 
-            # Time markers
-            ("TODAY", "today", "TIME", "📅", "cards/today.svg", json.dumps(generate_sample_keyframes("neutral")), "neutral"),
-            ("TOMORROW", "tomorrow", "TIME", "🔜", "cards/tomorrow.svg", json.dumps(generate_sample_keyframes("neutral")), "neutral"),
-            ("YESTERDAY", "yesterday", "TIME", "🔙", "cards/yesterday.svg", json.dumps(generate_sample_keyframes("neutral")), "neutral"),
-            ("NOW", "now,currently", "TIME", "⏱️", "cards/now.svg", json.dumps(generate_sample_keyframes("neutral")), "neutral"),
+            # Adjectives & Descriptions
+            ("GOOD", "good,nice,great,fine,well", "ADJECTIVE", "👍", "cards/good.svg", "smile"),
+            ("BAD", "bad,poor,unpleasant,terrible", "ADJECTIVE", "👎", "cards/bad.svg", "frown"),
+            ("HAPPY", "happy,cheerful,glad,joy", "ADJECTIVE", "😊", "cards/happy.svg", "smile"),
+            ("SAD", "sad,unhappy,depressed,sorrow", "ADJECTIVE", "😢", "cards/sad.svg", "frown"),
+            ("LOVE", "love,affection,adore", "ADJECTIVE", "❤️", "cards/love.svg", "smile"),
+            ("LIKE", "like,enjoy,prefer", "ADJECTIVE", "👍", "cards/like.svg", "smile"),
+            ("BIG", "big,large,huge,giant", "ADJECTIVE", "🐘", "cards/big.svg", "neutral"),
+            ("SMALL", "small,little,tiny", "ADJECTIVE", "🐭", "cards/small.svg", "neutral"),
+            ("HOT", "hot,warm,heat", "ADJECTIVE", "🔥", "cards/hot.svg", "neutral"),
+            ("COLD", "cold,chilly,cool,freezing", "ADJECTIVE", "❄️", "cards/cold.svg", "neutral"),
+            ("NAME", "name,title,called", "NOUN", "🏷️", "cards/name.svg", "neutral"),
+
+            # Questions (NMM Question tag)
+            ("WHAT", "what", "QUESTION", "❓", "cards/what.svg", "furrow_brow"),
+            ("WHERE", "where", "QUESTION", "📍", "cards/where.svg", "furrow_brow"),
+            ("WHO", "who", "QUESTION", "🙋", "cards/who.svg", "furrow_brow"),
+            ("WHY", "why", "QUESTION", "🤔", "cards/why.svg", "furrow_brow"),
+            ("WHEN", "when", "QUESTION", "⏰", "cards/when.svg", "furrow_brow"),
+            ("HOW", "how", "QUESTION", "💡", "cards/how.svg", "furrow_brow"),
+
+            # Time & Tense
+            ("TODAY", "today,this day", "TIME", "📅", "cards/today.svg", "neutral"),
+            ("TOMORROW", "tomorrow,next day", "TIME", "🔜", "cards/tomorrow.svg", "neutral"),
+            ("YESTERDAY", "yesterday,prior day", "TIME", "🔙", "cards/yesterday.svg", "neutral"),
+            ("TIME", "time,hour,clock", "TIME", "⏰", "cards/time.svg", "neutral"),
+            ("DAY", "day,daytime", "TIME", "🌞", "cards/day.svg", "neutral"),
+            ("NIGHT", "night,nighttime,dark", "TIME", "🌃", "cards/night.svg", "neutral"),
+            ("NOW", "now,currently,presently", "TIME", "⏱️", "cards/now.svg", "neutral"),
+            ("PRESENT", "present,is,am,are,now,currently", "TENSE", "⏱️", "cards/present.svg", "neutral"),
+            ("PAST", "past,was,were,did,ago", "TENSE", "🔙", "cards/past.svg", "neutral"),
+            ("FUTURE", "future,will,shall,later", "TENSE", "🔜", "cards/future.svg", "neutral"),
+
+            # Nature & Environment
+            ("SUN", "sun,sunshine,sunny", "NOUN", "☀️", "cards/sun.svg", "neutral"),
+            ("MOON", "moon,lunar", "NOUN", "🌙", "cards/moon.svg", "neutral"),
+            ("RAIN", "rain,raining,rainy,shower", "NOUN", "🌧️", "cards/rain.svg", "neutral"),
+
+            # Colors
+            ("COLOR", "color,colour", "NOUN", "🎨", "cards/color.svg", "neutral"),
+            ("RED", "red,crimson", "ADJECTIVE", "🔴", "cards/red.svg", "neutral"),
+            ("BLUE", "blue,azure", "ADJECTIVE", "🔵", "cards/blue.svg", "neutral"),
+            ("GREEN", "green,emerald", "ADJECTIVE", "🟢", "cards/green.svg", "neutral"),
+            ("YELLOW", "yellow,amber", "ADJECTIVE", "🟡", "cards/yellow.svg", "neutral"),
+            ("BLACK", "black,dark", "ADJECTIVE", "⚫", "cards/black.svg", "neutral"),
+            ("WHITE", "white,bright", "ADJECTIVE", "⚪", "cards/white.svg", "neutral"),
+
+            # Negation & Logic
+            ("NOT", "not,no,never,dont,didnt,wont", "NEGATION", "🚫", "cards/not.svg", "frown"),
+            ("NO", "no,negative,nope", "NEGATION", "❌", "cards/no.svg", "frown"),
+            ("YES", "yes,yeah,yep,affirmative", "COURTESY", "✅", "cards/good.svg", "smile"),
         ]
+
+        signs_data = []
+        for gloss, keywords, category, emoji, card, nmm in definitions:
+            # Look up authentic Hand Talk animation track string
+            track_str = (
+                ht_words.get(gloss) or
+                ht_words.get(gloss.upper()) or
+                ht_words.get(gloss.lower()) or
+                ht_words.get(gloss.replace('_', ' ')) or
+                ht_words.get(gloss.replace('_', ' ').lower())
+            )
+
+            # If alias mapping is needed
+            if not track_str:
+                if gloss == "STUDY":
+                    track_str = ht_words.get("LEARN")
+                elif gloss == "GOOD_MORNING":
+                    track_str = ht_words.get("HELLO")
+                elif gloss == "PRESENT":
+                    track_str = ht_words.get("NOW")
+                elif gloss == "PAST":
+                    track_str = ht_words.get("YESTERDAY")
+                elif gloss == "FUTURE":
+                    track_str = ht_words.get("TOMORROW")
+
+            if track_str:
+                keyframe_track = json.dumps(track_str)
+            else:
+                keyframe_track = json.dumps(gloss.lower())
+
+            signs_data.append((gloss, keywords, category, emoji, card, keyframe_track, nmm))
 
         cursor.executemany("""
             INSERT OR REPLACE INTO signs (gloss, english_keywords, category, emoji, card_asset, keyframe_track, nmm_expression)
             VALUES (?, ?, ?, ?, ?, ?, ?)
         """, signs_data)
 
-        # Seed Two-Handed ISL Fingerspelling (A-Z)
+        # Seed Authentic Hand Talk Fingerspelling (A-Z)
         alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
         fingerspelling_data = []
         for char in alphabet:
             card_path = f"cards/fingerspelling_{char.lower()}.svg"
-            keyframe_data = json.dumps([
-                {"time": 0.0, "RightHand": [0.1, 0.0, 0.2, 0.97], "LeftHand": [0.1, 0.0, -0.2, 0.97]},
-                {"time": 0.3, "RightHand": [0.4, 0.2, 0.5, 0.72], "LeftHand": [0.4, -0.2, -0.5, 0.72]},
-                {"time": 0.6, "RightHand": [0.0, 0.0, 0.0, 1.0], "LeftHand": [0.0, 0.0, 0.0, 1.0]}
-            ])
+            char_lower = char.lower()
+            track_str = bsl_anims.get(char_lower) or bzs_anims.get(char_lower)
+            if track_str:
+                keyframe_data = json.dumps(track_str)
+            else:
+                keyframe_data = json.dumps(char_lower)
+
             fingerspelling_data.append((char, f"FS_{char}", card_path, keyframe_data))
 
         cursor.executemany("""
@@ -125,7 +208,8 @@ def seed():
         """, fingerspelling_data)
 
         conn.commit()
-    print(f"Database seeded successfully with {len(signs_data)} signs and {len(fingerspelling_data)} fingerspelling characters.")
+
+    print(f"Database seeded successfully with {len(signs_data)} signs (ALL mapped to authentic Hand Talk tracks) and {len(fingerspelling_data)} fingerspelling characters.")
 
 if __name__ == "__main__":
     seed()
